@@ -1,0 +1,3 @@
+ToolSet: 2.8.2@C:\cygwin64
+Options: 
+CMake: 3.8.2@C:\Users\darki\AppData\Local\JetBrains\Toolbox\apps\CLion\ch-0\172.3968.17\bin\cmake_cygwin\bin\cmake.exe
