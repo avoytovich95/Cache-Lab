@@ -1,19 +1,17 @@
 /** Author: Alex Voytovich
  * User ID: avoytovi
  * School ID: 804 819 692
- *
- * To run, -lm must be used to link the math library for the
- * "double pow(double a, double b)" function otherwise the
- * the compiler see it as an unrecognized reference
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
 #include <unistd.h>
-#include <math.h>
-#include <stdbool.h>
 #include "cachelab.h"
+
+#define BITSIZE 64
+#define TRUE     1
+#define FALSE    0
 
 typedef unsigned long long mem_address;
 
@@ -29,13 +27,13 @@ typedef struct {
     int hits;
     int misses;
     int evicts;
-    bool verbosity;
+    int verbosity;
 }cache_param;
 
 // Structure that holds address, tag, validity, and time stamp.
 typedef struct {
     int last_used; //Time stamp if the line
-    bool valid;  //Whether line is used or not
+    int filled;  //Whether line is used or not
     mem_address tag; //Stored address tag
     char *block; //Line block
 }cache_line;
@@ -99,7 +97,7 @@ int main(int argc, char** argv) {
                 trace = optarg;
                 break;
             case 'v':
-                track->verbosity = true;
+                track->verbosity = TRUE;
                 break;
             case 'h':
                 print_help(argv);
@@ -112,7 +110,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    //Check if parameters taken are valid
+    //Check if parameters taken are filled
     if (track->s == 0 || track->b == 0 || track->E == 0 || trace == NULL) {
         printf("%s: Missing Required Command Line Argument\n", argv[0]);
         print_help(argv);
@@ -121,8 +119,8 @@ int main(int argc, char** argv) {
     }
 
     //Initialize the parameters, and build the cache simulator
-    track->S = (long long int)pow(2, track->s);
-    track->B = (long long int)pow(2, track->b);
+    track->S = (long long int)1 << track->s; // S = 2^s
+    track->B = (long long int)1 << track->b; // B = 2^b
     track->hits = 0;
     track->misses = 0;
     track->evicts = 0;
@@ -162,8 +160,8 @@ int main(int argc, char** argv) {
 
     printSummary(track->hits, track->misses, track->evicts);
     //Free's all allocated structures
-    free(track);
     clean(cache_sim, track->S);
+    free(track);
     return 0;
 }
 
@@ -182,11 +180,11 @@ int main(int argc, char** argv) {
  * @param address
  */
 void run_cache(cache *cache_sim, cache_param *param, mem_address address){
-    bool cache_full = true;//Assume cache is full
+    int cache_full = TRUE;//Assume cache is full
     int prev_hit = param->hits;//Record previous hits for checking miss
 
     //Hashing function for getting set of lines to work with
-    int tag = 64 - param->s - param->b; //t = m - s - b
+    int tag = BITSIZE - param->s - param->b; //t = m - s - b
     mem_address in_tag = address >> (param->s + param->b);
     mem_address temp = address << tag;
     mem_address set_index = temp >> (tag + param->b);
@@ -194,13 +192,13 @@ void run_cache(cache *cache_sim, cache_param *param, mem_address address){
     //Checks if address is already stores, and checks if cache is not full
     cache_set set = cache_sim->sets[set_index];
     for (int i = 0; i < param->E; ++i){
-        if (set.lines[i].valid && set.lines[i].tag == in_tag){
+        if (set.lines[i].filled && set.lines[i].tag == in_tag){
             set.lines[i].last_used++;
             param->hits++;
             if(param->verbosity)
                 printf("hit ");
-        }else if (!set.lines[i].valid && cache_full)
-            cache_full = false;
+        }else if (!set.lines[i].filled && cache_full)
+            cache_full = FALSE;
     }
     //If recorded hits is the same as current hits, it's a miss
     if (prev_hit == param->hits){
@@ -221,9 +219,9 @@ void run_cache(cache *cache_sim, cache_param *param, mem_address address){
         set.lines[least_used].last_used = used_line[1] + 1;
     }else{//If cache is not full, find next available line, and set the last used as latest++
         for(int i = 0; i < param->E; ++i){
-            if(!set.lines[i].valid){
+            if(!set.lines[i].filled){
                 set.lines[i].tag = in_tag;
-                set.lines[i].valid = true;
+                set.lines[i].filled = TRUE;
                 set.lines[i].last_used = used_line[1] + 1;
                 break;
             }
@@ -279,7 +277,7 @@ void build_cache(long long set_count, int lines_count, cache *cache_sim){
         for (int x = 0; x < lines_count; ++x){
             line.last_used = 0;
             line.tag = 0;
-            line.valid = false;
+            line.filled = FALSE;
             set.lines[x] = line;
         }
         cache_sim->sets[i] = set;
@@ -293,10 +291,8 @@ void build_cache(long long set_count, int lines_count, cache *cache_sim){
  * @param set_size
  */
 void clean(cache *cache_sim, long long set_size) {
-    cache_set set;
     for (int i = 0; i < set_size; ++i){
-        set = cache_sim->sets[i];
-        free(set.lines);
+        free(cache_sim->sets[i].lines);
     }
     free(cache_sim->sets);
     free(cache_sim);
